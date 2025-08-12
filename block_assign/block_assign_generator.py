@@ -1,17 +1,19 @@
 import argparse
+from pathlib import Path
 import random
 import numpy as np
 import pandas as pd
 from itertools import combinations
 from gurobipy import Env, Model, GRB, quicksum
 
-ANON_FILE = "anon_coenrol.csv"
-HIST_TOTALS_FILE = "hist_totals.csv"
-LICENSE_PARAMS = {
-    "WLSACCESSID": "2954ef62-8fa8-4f22-a875-c2ebc1136e22",  # Adam
-    "WLSSECRET": "08ab134c-9a73-4212-a3c0-d625c9f8a662",
-    "LICENSEID": 931025,
-}
+# Paths
+SCRIPT_DIR = Path(__file__).resolve().parent
+ROOT_DIR = SCRIPT_DIR.parent
+INPUTS_DIR = ROOT_DIR / "inputs"
+OUTPUTS_DIR = SCRIPT_DIR / "outputs"
+
+ANON_FILE = INPUTS_DIR / "anon_coenrol.csv"
+HIST_TOTALS_FILE = INPUTS_DIR / "hist_totals.csv"
 
 
 def pick_course_subset(n, total_courses):
@@ -80,7 +82,9 @@ def run_simulation(size, seed=3):
 
     exams = list(co.columns)
     blocks = list(range(1, 25))
-    env = Env(params=LICENSE_PARAMS)
+
+    # Use default Gurobi license discovery; credentials must come from environment or license file
+    env = Env()
     model = Model(env=env)
 
     x = model.addVars(exams, blocks, vtype=GRB.BINARY, name="x")
@@ -96,8 +100,11 @@ def run_simulation(size, seed=3):
     )
     model.setObjective(conflict, GRB.MINIMIZE)
     # model.optimize()
-    model.write(f"{size}.lp")
-    print(f"Done. LP ⇒ {size}.lp, stats: {stats}")
+
+    OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = OUTPUTS_DIR / f"blockassign_n{size}_seed{seed}.lp"
+    model.write(str(out_path))
+    print(f"Done. LP ⇒ {out_path}, stats: {stats}")
 
 
 def main():
@@ -110,3 +117,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

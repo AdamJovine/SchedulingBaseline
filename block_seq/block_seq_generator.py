@@ -1,5 +1,5 @@
 import random
-import os
+from pathlib import Path
 
 import itertools
 import pandas as pd
@@ -10,12 +10,11 @@ import numpy as np
 import argparse
 from gurobipy import Env, Model, GRB, quicksum
 
-
-LICENSE_PARAMS = {
-    "WLSACCESSID": "17b613a5-d70f-4885-94aa-c54cf45cf07a",
-    "WLSSECRET": "d053d738-acec-41e3-bd66-bbc460d6b31e",
-    "LICENSEID": 2654947,
-}
+# Paths
+SCRIPT_DIR = Path(__file__).resolve().parent
+ROOT_DIR = SCRIPT_DIR.parent
+INPUTS_DIR = ROOT_DIR / "inputs"
+OUTPUTS_DIR = SCRIPT_DIR / "outputs"
 
 
 def setup():
@@ -24,11 +23,7 @@ def setup():
     exam_map_df = pd.read_csv("exam_map.csv")
     exam_map = {}
     for r in exam_map_df.iterrows():
-        # print("r", r)
         exam_map[r[1]["Unnamed: 0"]] = r[1]["num"]
-        # exam_map = dict(
-        #    exam_map_df
-        # )  # zip(list(exam_map_df.index), list(exam_map_df["num"])))
     return exam_map
 
 
@@ -347,33 +342,25 @@ def scheduling_IP(
 
     # file I/O if requested
     m.update()
-    m.write(f"{num_courses}{random_seed}.lp")
+    OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = OUTPUTS_DIR / f"blockseq_n{num_courses}_seed{random_seed}_slow{int(slow)}.lp"
+    m.write(str(out_path))
     if read:
         m.read(readfile)
     # m.optimize()
 
-    # collect solution
-    output = []
-    for s in slots:
-        output.append((s, int(schedule[s].x)))
-    penalty = {
-        "triple_in_day": triple_in_day_var.x,
-        "triple_in_24hr": triple_in_24hr_var.x,
-        "b2b_eveMorn": b2b_eveMorn_var.x,
-        "b2b_other": b2b_other_var.x,
-        "three_exams_four_slots": three_exams_four_slots_var.x,
-    }
-    return m.ObjVal, output, penalty
+    # no return; builder just writes the LP
+    return None
 
 
 def run_simulation(n_courses, seed, slots, slow):
 
     sim_df = simulate_triplet_coenrol_simple(
         n_courses=n_courses,
-        t_co_file="anon_t_co.csv",
+        t_co_file=str(INPUTS_DIR / "anon_t_co.csv"),
         m_samples=100_000,
         random_seed=seed,
-        output_file="sim_t_co.csv",
+        output_file=str(OUTPUTS_DIR / "sim_t_co.csv"),
     )
     print(f"Wrote {len(sim_df)} non-zero triplets")
     print(sim_df.head())
@@ -423,11 +410,11 @@ def run_simulation(n_courses, seed, slots, slow):
     # assumes a CSV with columns "Exam Group","Exam Block"
 
     # Read the CSV and convert to dictionary
-    block_map = pd.read_csv("anon24.csv").set_index("AnonExam")["Exam Block"].to_dict()
+    block_map = pd.read_csv(INPUTS_DIR / "anon24.csv").set_index("AnonExam")["Exam Block"].to_dict()
     # print("block_map_from_csv", block_map)
     # — load exam‐level co‐enrollment tables —
     # t_co = pd.read_csv('gen_lp/t_co.csv', converters={'triplets': ast.literal_eval})
-    p_co = pd.read_csv("anon_coenrol.csv", index_col=0)
+    p_co = pd.read_csv(INPUTS_DIR / "anon_coenrol.csv", index_col=0)
 
     # — update pair counts p[(block_i,block_j)] += exam_pair_count —
     for (exam_i, exam_j), cnt in p_co.stack().items():
@@ -439,27 +426,23 @@ def run_simulation(n_courses, seed, slots, slow):
 
     # — update triplet counts t[(b1,b2,b3)] += exam_triplet_count —
     for r in sim_df.iterrows():
-        # print(r)
-        # print(r[1]["course1"])
-        # print(r[1]["course2"])
-
         b1 = block_map.get(r[1]["course1"], random.choice(slots))
         b2 = block_map.get(r[1]["course2"], random.choice(slots))
         b3 = block_map.get(r[1]["course3"], random.choice(slots))
         if None not in (b1, b2, b3):
             t[(int(b1), int(b2), int(b3))] += r[1]["count"]
-    alpha1 = 10  # int(lic_param['3_in_1_day'].iloc[0])
-    beta1 = 5  # int(lic_param['3_in_24h'].iloc[0])
-    gamma3 = 3  # int(lic_param['b_to_b'].iloc[0])
-    delta1 = 2  # int(lic_param['2_in_3'].iloc[0])
-    vega1 = 1  # int(lic_param['late_first'].iloc[0])
+    alpha1 = 10
+    beta1 = 5
+    gamma3 = 3
+    delta1 = 2
+    vega1 = 1
 
-    lambda_big_exam_1 = 1  # int(lic_param['big_exam'].iloc[0]) * size_cutoff_1_weight
-    lambda_big_exam_2 = 1  # int(lic_param['big_exam'].iloc[0]) * size_cutoff_2_weight
+    lambda_big_exam_1 = 1
+    lambda_big_exam_2 = 1
 
-    lambda_big_block = 1000  # int(lic_param['big_block'].iloc[0])
-    theta1 = 2  # int(lic_param['large_gap'].iloc[0])
-    first1 = 1  # string_to_int_list(lic_param['first'].iloc[0])
+    lambda_big_block = 1000
+    theta1 = 2
+    first1 = 1
     print("alpha1 =", alpha1)
     print("beta1 =", beta1)
     print("gamma3 =", gamma3)
@@ -510,3 +493,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
