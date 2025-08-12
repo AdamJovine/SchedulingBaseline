@@ -79,7 +79,7 @@ block_assign/
 
 Note: `setup.py` and its data-generation pipeline were removed for open-sourcing. Bring your own anonymized CSVs listed above.
 
-## block_seq (block sequencing MIP instance)
+# block_seq (block sequencing MIP instance)
 
 Run the simulation & optimization in one command:
 
