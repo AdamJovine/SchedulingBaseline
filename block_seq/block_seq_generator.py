@@ -343,17 +343,19 @@ def scheduling_IP(
     # file I/O if requested
     m.update()
     OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = OUTPUTS_DIR / f"blockseq_n{num_courses}_seed{random_seed}_slow{int(slow)}.lp"
+    out_path = (
+        OUTPUTS_DIR / f"blockseq_n{num_courses}_seed{random_seed}_slow{int(slow)}.lp"
+    )
     m.write(str(out_path))
     if read:
         m.read(readfile)
-    # m.optimize()
+    m.optimize()
 
     # no return; builder just writes the LP
     return None
 
 
-def run_simulation(n_courses, seed, slots, slow):
+def run_simulation(n_courses, seed, slot_num):
 
     sim_df = simulate_triplet_coenrol_simple(
         n_courses=n_courses,
@@ -365,7 +367,8 @@ def run_simulation(n_courses, seed, slots, slow):
     print(f"Wrote {len(sim_df)} non-zero triplets")
     print(sim_df.head())
     slots_per_day = 3
-    slots = list(range(1, slots + 1))
+
+    slots = list(range(1, slot_num + 1))
     blocks = slots
     # Translation to different slot notation
     slots_n = range(1, len(slots) + 1)
@@ -392,7 +395,6 @@ def run_simulation(n_courses, seed, slots, slow):
                     triple_day_start.append(d[s])
                 else:
                     triple_24_start.append(d[s])
-
     # — your existing zero‐inits —
     t = {}  # triplet
     p = {}  # pair
@@ -408,9 +410,67 @@ def run_simulation(n_courses, seed, slots, slow):
 
     # — load the exam→block mapping —
     # assumes a CSV with columns "Exam Group","Exam Block"
-
     # Read the CSV and convert to dictionary
-    block_map = pd.read_csv(INPUTS_DIR / "anon24.csv").set_index("AnonExam")["Exam Block"].to_dict()
+    block_map = (
+        pd.read_csv(INPUTS_DIR / "anon24.csv")
+        .set_index("AnonExam")["Exam Block"]
+        .to_dict()
+    )
+
+    # Remap from 24 blocks to exactly 'slots' blocks
+    if slots != 24:
+        # Create a remapping from old blocks (1-24) to new blocks (1-slots)
+        old_to_new = {}
+
+        if slot_num < 24:
+            # Merge blocks: distribute 24 blocks into 'slots' blocks
+            # Each new block gets approximately 24/slots old blocks
+            blocks_per_slot = 24 / slot_num
+            for old_block in range(1, 25):
+                # Map old block to new block
+                new_block = min(int((old_block - 1) / blocks_per_slot) + 1, slot_num)
+                old_to_new[old_block] = new_block
+        else:
+            # Split blocks: distribute 24 blocks across 'slots' blocks
+            # Randomly assign exams from each old block to multiple new blocks
+
+            random.seed(seed)  # Use the existing seed for reproducibility
+
+            # First, create a basic mapping spreading old blocks across new blocks
+            new_blocks_per_old = slot_num / 24
+            for old_block in range(1, 25):
+                # Each old block maps to a range of new blocks
+                start_new = int((old_block - 1) * new_blocks_per_old) + 1
+                end_new = min(int(old_block * new_blocks_per_old) + 1, slot_num + 1)
+                # For now, just map to the first block in the range
+                # You could randomize this if you want to distribute more evenly
+                old_to_new[old_block] = start_new
+
+            # Alternative: randomly distribute exams across all available slots
+            # This creates more even distribution when slots > 24
+            exam_list = list(block_map.keys())
+            random.shuffle(exam_list)
+
+            # Create a new block_map by cycling through available slots
+            new_block_map = {}
+            for idx, exam in enumerate(exam_list):
+                new_block_map[exam] = (idx % slot_num) + 1
+            block_map = new_block_map
+
+        # Apply the remapping to block_map (only if we didn't already create new_block_map)
+        if slot_num < 24:
+            for exam, old_block in block_map.items():
+                if old_block in old_to_new:
+                    block_map[exam] = old_to_new[old_block]
+                else:
+                    # If block number is out of range, assign to a random slot
+                    block_map[exam] = random.randint(1, slot_num)
+
+    # Ensure all blocks are within the valid range [1, slots]
+    for exam in block_map:
+        if block_map[exam] > slot_num or block_map[exam] < 1:
+            block_map[exam] = random.randint(1, slot_num)
+
     # print("block_map_from_csv", block_map)
     # — load exam‐level co‐enrollment tables —
     # t_co = pd.read_csv('gen_lp/t_co.csv', converters={'triplets': ast.literal_eval})
@@ -473,7 +533,7 @@ def run_simulation(n_courses, seed, slots, slow):
         lambda_large2=lambda_big_exam_2,
         lambda_big=lambda_big_block,
         blocks=blocks,
-        slow=slow,
+        slow=True,
     )
 
 
@@ -483,15 +543,12 @@ def main():
     p.add_argument("size", type=int, help="Number of courses")
     p.add_argument("--seed", type=int, default=3)
     p.add_argument("--slots", type=int, default=24)
-    p.add_argument("--slow", type=bool, default=False)
     args = p.parse_args()
     if args.slots < 24:
         print("Warning: slots must be more than 24")
     args = p.parse_args()
-    run_simulation(args.size, seed=args.seed, slots=args.slots, slow=args.slow)
+    run_simulation(args.size, seed=args.seed, slot_num=args.slots)
 
 
 if __name__ == "__main__":
     main()
-
-

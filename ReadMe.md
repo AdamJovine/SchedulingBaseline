@@ -122,15 +122,15 @@ Cornell University Uses Integer Programming to Optimize Final Exam Scheduling. A
 ## Benchmark Table
 These are runs on my computer using gurobipy and python 3.11. 
 
-| Size | Slots | Slow |   Runtime (s)  |
-| ---- | ----- | ----------- |----|
-| 200  | 24    | False       |  94  |
-| 400  | 24    | False       |  170 |
-| 200  | 34    | False       |  979 |
-| 400  | 34    | False       |  400 |
-| 200  | 44    | False       |  1595   |
-| 200  | 24    | True        |  5+ hours    |
-| 400  | 24    | True        |  5+ hours    |
+| Size | Slots |   Runtime (s)  |
+| ---- | ----- | ----|
+| 200  | 10    |  25  |
+| 400  | 10    |  54 |
+| 200  | 15    | 10651  |
+| 400  | 15    |  5+ hours  |
+| 200  | 20    | 5+ hours  |
+| 400  | 20    |  5+ hours |
+
 
 
 
