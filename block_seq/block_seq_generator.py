@@ -544,8 +544,6 @@ def main():
     p.add_argument("--seed", type=int, default=3)
     p.add_argument("--slots", type=int, default=24)
     args = p.parse_args()
-    if args.slots < 24:
-        print("Warning: slots must be more than 24")
     args = p.parse_args()
     run_simulation(args.size, seed=args.seed, slot_num=args.slots)
 
